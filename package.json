@@ -1,7 +1,7 @@
 {
   "name": "verified-bot-commit",
   "description": "GitHub Action for creating signed and verified bot commits",
-  "version": "2.0.7",
+  "version": "2.1.0",
   "author": "Kyle Colantonio",
   "private": true,
   "homepage": "https://github.com/IAreKyleW00t/verified-bot-commit",
@@ -39,7 +39,6 @@
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/exec": "^1.1.1",
-    "@actions/github": "^6.0.1",
     "@octokit/core": "^7.0.6",
     "@octokit/plugin-retry": "^8.0.3",
     "@octokit/plugin-throttling": "^11.0.3",
