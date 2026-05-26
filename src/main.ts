@@ -23,14 +23,24 @@ export async function run(): Promise<void> {
       retry: { enabled: !noRetry },
       throttle: {
         enabled: !noThrottle,
-        onRateLimit: (retryAfter, options, _, retryCount) => {
+        onRateLimit: (
+          retryAfter: number,
+          options: { method: string; url: string },
+          _: Octokit,
+          retryCount: number
+        ) => {
           const message = `Request quota exhausted for request ${options.method} ${options.url}`
           if (!noRetry && retryCount < maxRetries) {
             core.warning(`${message} - Retrying after ${retryAfter} seconds...`)
             return true
           } else core.warning(message)
         },
-        onSecondaryRateLimit: (retryAfter, options, _, retryCount) => {
+        onSecondaryRateLimit: (
+          retryAfter: number,
+          options: { method: string; url: string },
+          _: Octokit,
+          retryCount: number
+        ) => {
           const message = `SecondaryRateLimit detected for request ${options.method} ${options.url}`
           if (!noRetry && retryCount < maxRetries) {
             core.warning(`${message} - Retrying after ${retryAfter} seconds...`)
@@ -64,14 +74,18 @@ export async function run(): Promise<void> {
 
     core.startGroup('🪁 Getting changed files...')
     if (autoStage) await exec.exec('git', ['add', '-A'], execOpts)
-    await exec.exec('git', ['diff', '--cached', '--name-only'], {
-      ...execOpts,
-      listeners: {
-        stdout: (data: Buffer) => {
-          execOutput += data.toString()
+    await exec.exec(
+      'git',
+      ['diff', '--cached', '--name-only', '--no-renames'],
+      {
+        ...execOpts,
+        listeners: {
+          stdout: (data: Buffer) => {
+            execOutput += data.toString()
+          }
         }
       }
-    })
+    )
     core.endGroup()
     const changedFiles = execOutput
       .trim()
@@ -79,7 +93,10 @@ export async function run(): Promise<void> {
       .filter((f) => f)
 
     // If there are no changed files, exit early
-    const noCommitAction = core.getInput('if-no-commit')
+    const allowEmptyCommit = core.getBooleanInput('allow-empty-commit')
+    const noCommitAction = allowEmptyCommit
+      ? 'ignore'
+      : core.getInput('if-no-commit')
     if (changedFiles.length === 0) {
       if (noCommitAction === 'error') {
         throw new Error('No changes found in local branch')
@@ -90,7 +107,8 @@ export async function run(): Promise<void> {
       } else {
         core.info('No changes found in local branch')
       }
-      return
+
+      if (!allowEmptyCommit) return
     }
 
     // Create a blob object for each file
@@ -108,12 +126,12 @@ export async function run(): Promise<void> {
 
         // Skip the file entirely if a pattern specifically negates it
         if (pattern.startsWith('!')) {
-          if (minimatch(file, pattern.substring(1))) break
+          if (minimatch(file, pattern.substring(1), { dot: true })) break
           continue
         }
 
         // Only include files that match a pattern
-        if (minimatch(file, pattern)) {
+        if (minimatch(file, pattern, { dot: true })) {
           const blob = await git.createBlob(
             file,
             workspace,
@@ -135,6 +153,7 @@ export async function run(): Promise<void> {
     )
 
     // Confirm that blobs were made
+    let tree = headTree
     if (blobs.length === 0) {
       if (noCommitAction === 'error') {
         throw new Error('No files to commit')
@@ -145,18 +164,13 @@ export async function run(): Promise<void> {
       } else {
         core.info('No files to commit')
       }
-      return
+      if (!allowEmptyCommit) return
+      core.info(`🌳 Reusing Git Tree @ ${tree}`)
+    } else {
+      // Create tree with all blobs
+      tree = await git.createTree(blobs, headTree, repo[0], repo[1], octokit)
+      core.info(`🌳 Created Git Tree @ ${tree}`)
     }
-
-    // Create tree with all blobs
-    const tree = await git.createTree(
-      blobs,
-      headTree,
-      repo[0],
-      repo[1],
-      octokit
-    )
-    core.info(`🌳 Created Git Tree @ ${tree}`)
     core.setOutput('tree', tree)
 
     // Create the signed commit

@@ -31,7 +31,7 @@ jobs:
 
       - name: Create GitHub Release
         id: release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           make_latest: ${{ steps.latest.outputs.latest }}
           tag_name: ${{ github.ref_name }}
@@ -40,11 +40,11 @@ jobs:
   tags:
     name: Update shared tags
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ secrets.GH_RELEASE_PAT }}
 
       - name: Update tags
         shell: bash
